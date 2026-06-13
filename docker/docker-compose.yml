@@ -1,0 +1,109 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Telecom-Bridge: REST-to-Diameter Gateway — Docker Compose
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose up --build         # Start all services
+#   docker compose down -v            # Stop and remove volumes
+#   docker compose logs -f gateway    # Tail gateway logs
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  telecom-net:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+services:
+
+  # ── Diameter Simulator ──────────────────────────────────────────────────────
+  diameter-simulator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.simulator
+    container_name: diameter-simulator
+    ports:
+      - "3868:3868"   # Diameter TCP
+      - "9090:9090"   # Simulator HTTP management
+    networks:
+      - telecom-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "3868"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "1.0"
+
+  # ── Gateway Service ─────────────────────────────────────────────────────────
+  gateway-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    container_name: gateway-service
+    ports:
+      - "8080:8080"   # REST API
+    networks:
+      - telecom-net
+    depends_on:
+      diameter-simulator:
+        condition: service_healthy
+    environment:
+      DIAMETER_SERVER_HOST: diameter-simulator
+      DIAMETER_SERVER_PORT: "3868"
+      DIAMETER_ORIGIN_HOST: "gw.telecom.com"
+      DIAMETER_ORIGIN_REALM: "telecom.com"
+      DIAMETER_DEST_REALM: "telecom.com"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "2.0"
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    ports:
+      - "9091:9090"
+    networks:
+      - telecom-net
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    restart: unless-stopped
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - telecom-net
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "telecom123"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    restart: unless-stopped
+    depends_on:
+      - prometheus

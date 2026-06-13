@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Build
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jdk-alpine AS build
+
+WORKDIR /workspace
+
+COPY pom.xml .
+COPY gateway-service/pom.xml gateway-service/pom.xml
+COPY diameter-simulator/pom.xml diameter-simulator/pom.xml
+COPY load-test/pom.xml load-test/pom.xml
+
+RUN apk add --no-cache maven && \
+    mvn dependency:go-offline -pl diameter-simulator --no-transfer-progress -q
+
+COPY diameter-simulator/src diameter-simulator/src
+RUN mvn package -pl diameter-simulator -am --no-transfer-progress -DskipTests -q
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine AS runtime
+
+LABEL maintainer="platform@telecom.com" \
+      version="1.0.0" \
+      description="Telecom-Bridge Diameter Simulator"
+
+RUN addgroup -S telecom && adduser -S telecom -G telecom
+USER telecom
+
+WORKDIR /app
+COPY --from=build /workspace/diameter-simulator/target/diameter-simulator-*.jar app.jar
+
+ENV JAVA_OPTS="\
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75.0 \
+  -XX:+UseG1GC \
+  --enable-preview"
+
+# Diameter TCP port
+EXPOSE 3868
+# Management HTTP port
+EXPOSE 9090
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD nc -z localhost 3868 || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]

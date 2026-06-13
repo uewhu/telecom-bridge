@@ -1,0 +1,57 @@
+# ─── Maven build output ───────────────────────────────────────────────────────
+target/
+*/target/
+**/target/
+
+# ─── Compiled class files ─────────────────────────────────────────────────────
+*.class
+
+# ─── JAR / WAR / EAR ─────────────────────────────────────────────────────────
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# ─── IDE files ────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.classpath
+*.project
+.settings/
+.factorypath
+
+# ─── OS files ─────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+log/
+
+# ─── PCAP / binary traces ─────────────────────────────────────────────────────
+*.pcap
+*.pcapng
+
+# ─── Gatling results ──────────────────────────────────────────────────────────
+load-test/results/
+gatling-results/
+
+# ─── Spring Boot DevTools ─────────────────────────────────────────────────────
+.spring-boot-devtools.properties
+
+# ─── Environment / secrets ────────────────────────────────────────────────────
+.env
+*.env
+secrets/
+
+# ─── Docker volumes ───────────────────────────────────────────────────────────
+docker/volumes/

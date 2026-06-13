@@ -1,0 +1,50 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: telecom-bridge-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
+
+# ─── Diameter Client ──────────────────────────────────────────────────────────
+diameter:
+  server-host: ${DIAMETER_SERVER_HOST:localhost}
+  server-port: ${DIAMETER_SERVER_PORT:3868}
+  origin-host: ${DIAMETER_ORIGIN_HOST:gw.telecom.com}
+  origin-realm: ${DIAMETER_ORIGIN_REALM:telecom.com}
+  destination-realm: ${DIAMETER_DEST_REALM:telecom.com}
+  timeout-ms: 5000
+  watchdog-interval-ms: 30000
+
+# ─── Actuator / Observability ─────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# ─── OpenAPI / Swagger ────────────────────────────────────────────────────────
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.telecom.gateway: DEBUG
+    io.netty: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

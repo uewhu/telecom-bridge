@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Build
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jdk-alpine AS build
+
+WORKDIR /workspace
+
+# Copy parent POM and module POMs first (layer cache optimization)
+COPY pom.xml .
+COPY gateway-service/pom.xml gateway-service/pom.xml
+COPY diameter-simulator/pom.xml diameter-simulator/pom.xml
+COPY load-test/pom.xml load-test/pom.xml
+
+# Download dependencies
+RUN apk add --no-cache maven && \
+    mvn dependency:go-offline -pl gateway-service --no-transfer-progress -q
+
+# Copy sources and build
+COPY gateway-service/src gateway-service/src
+RUN mvn package -pl gateway-service -am --no-transfer-progress -DskipTests -q
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine AS runtime
+
+LABEL maintainer="platform@telecom.com" \
+      version="1.0.0" \
+      description="Telecom-Bridge Gateway Service"
+
+# Create non-root user for security
+RUN addgroup -S telecom && adduser -S telecom -G telecom
+USER telecom
+
+WORKDIR /app
+
+# Copy the executable JAR from build stage
+COPY --from=build /workspace/gateway-service/target/gateway-service-*.jar app.jar
+
+# JVM tuning for containers
+ENV JAVA_OPTS="\
+  -XX:+UseContainerSupport \
+  -XX:MaxRAMPercentage=75.0 \
+  -XX:+UseG1GC \
+  -XX:MaxGCPauseMillis=20 \
+  -XX:+HeapDumpOnOutOfMemoryError \
+  -XX:HeapDumpPath=/tmp/heapdump.hprof"
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://localhost:8080/actuator/health || exit 1
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
